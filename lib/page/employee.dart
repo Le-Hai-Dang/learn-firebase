@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:learn/database.dart';
+import 'package:random_string/random_string.dart';
 
 class EmployeePage extends StatefulWidget {
   const EmployeePage({super.key});
@@ -8,18 +10,40 @@ class EmployeePage extends StatefulWidget {
 }
 
 class _EmployeePageState extends State<EmployeePage> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _positionController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _positionController.dispose();
-    _emailController.dispose();
-    super.dispose();
+  TextEditingController namecontroller = new TextEditingController();
+  TextEditingController titlecontroller = new TextEditingController();
+  TextEditingController emailcontroller = new TextEditingController();
+  bool _isLoading = false;
+  String _errorMessage = '';
+  
+  // Hiển thị thông báo dưới dạng SnackBar
+  void _showMessage(String message, bool isError) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
+  // Kiểm tra các trường nhập liệu
+  bool _validateInputs() {
+    if (namecontroller.text.isEmpty) {
+      _showMessage('Vui lòng nhập họ và tên', true);
+      return false;
+    }
+    if (titlecontroller.text.isEmpty) {
+      _showMessage('Vui lòng nhập chức vụ', true);
+      return false;
+    }
+    if (emailcontroller.text.isEmpty) {
+      _showMessage('Vui lòng nhập email', true);
+      return false;
+    }
+    return true;
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -42,76 +66,110 @@ class _EmployeePageState extends State<EmployeePage> {
                 ),
               ),
               const SizedBox(height: 20),
-              _buildTextField(
-                controller: _nameController,
-                label: 'Họ và tên',
-                hint: 'Nhập họ và tên',
-                prefixIcon: Icons.person,
+              TextField(
+                controller: namecontroller,
+                decoration: InputDecoration(
+                  labelText: 'Họ và tên',
+                  hintText: 'Nhập họ và tên',
+                  prefixIcon: Icon(Icons.person),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
-              _buildTextField(
-                controller: _positionController,
-                label: 'Chức vụ',
-                hint: 'Nhập chức vụ',
-                prefixIcon: Icons.work,
+              TextField(
+                controller: titlecontroller,
+                decoration: InputDecoration(
+                  labelText: 'Chức vụ',
+                  hintText: 'Nhập chức vụ',
+                  prefixIcon: Icon(Icons.work),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
-              _buildTextField(
-                controller: _emailController,
-                label: 'Email',
-                hint: 'Nhập địa chỉ email',
-                prefixIcon: Icons.email,
+              TextField(
+                controller: emailcontroller,
                 keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  hintText: 'Nhập địa chỉ email',
+                  prefixIcon: Icon(Icons.email),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
+              if (_errorMessage.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    _errorMessage,
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
               const SizedBox(height: 30),
               Center(
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Xử lý khi nhấn nút lưu
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('Lưu thông tin'),
-                ),
+                child: _isLoading
+                    ? CircularProgressIndicator()
+                    : ElevatedButton(
+                        onPressed: () async {
+                          // Kiểm tra dữ liệu đầu vào
+                          if (!_validateInputs()) return;
+                          
+                          setState(() {
+                            _isLoading = true;
+                            _errorMessage = '';
+                          });
+                          
+                          try {
+                            String id = randomAlpha(10);
+                            Map<String, dynamic> employeeInforMap = {
+                              "name": namecontroller.text,
+                              "title": titlecontroller.text,
+                              "email": emailcontroller.text,
+                              "id": id,
+                            };
+                            
+                            print("Sending data to Firebase: $employeeInforMap");
+                            
+                            await DatabaseMethods().addEmployeeDetails(employeeInforMap, id);
+                            
+                            // Hiển thị thông báo thành công
+                            _showMessage('Lưu thông tin thành công!', false);
+                            
+                            // Xóa dữ liệu đã nhập
+                            namecontroller.clear();
+                            titlecontroller.clear();
+                            emailcontroller.clear();
+                          } catch (e) {
+                            print("Error saving to Firebase: $e");
+                            setState(() {
+                              _errorMessage = 'Lỗi: ${e.toString()}';
+                            });
+                            _showMessage('Lỗi khi lưu thông tin: ${e.toString()}', true);
+                          } finally {
+                            setState(() {
+                              _isLoading = false;
+                            });
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text('Lưu thông tin'),
+                      ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-  
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData prefixIcon,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(prefixIcon, color: Colors.deepPurple.shade300),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade400),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
-        ),
-        fillColor: Colors.grey.shade50,
-        filled: true,
-        contentPadding: const EdgeInsets.symmetric(vertical: 16),
       ),
     );
   }
